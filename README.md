@@ -1,8 +1,18 @@
 # flutter-offline-support
 
-A new Flutter project.
+Offline support in Flutter implementation
 
-## Getting Started
+## Starting Python server
+
+```
+cd server
+virtualenv venv
+./venv/bin/pip install -r requirements.txt
+./venv/bin/python app.py
+```
+
+
+
 
 This project is a starting point for a Flutter application.
 
