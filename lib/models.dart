@@ -2,8 +2,9 @@ class Product {
   final String id;
   final String name;
   final String categoryId;
+  final DateTime generated;
 
-  Product({this.id, this.name, this.categoryId});
+  Product({this.id, this.name, this.categoryId, this.generated});
 
   Map<String, dynamic> toJson() {
     return {
@@ -17,6 +18,7 @@ class Product {
       id: json['id'],
       name: json['name'],
       categoryId: json['category_id'],
+      generated: DateTime.parse(json['generated']),
     );
   }
 }

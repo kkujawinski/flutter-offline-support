@@ -29,6 +29,7 @@ class ProductsList extends StatefulWidget {
 
 class _ProductsListState extends State<ProductsList> {
   List<Product> products;
+  String loadingStatus;
 
   @override
   void initState() {
@@ -37,11 +38,15 @@ class _ProductsListState extends State<ProductsList> {
   }
 
   Future loadData() async {
+    setState(() {
+      loadingStatus = 'LOADING';
+    });
     await Future.delayed(Duration(seconds: 1));
     var products = await widget.productsService.getAll()
       ..sortByName();
     setState(() {
       this.products = products;
+      loadingStatus = 'ONLINE DATA';
     });
   }
 
@@ -63,7 +68,8 @@ class _ProductsListState extends State<ProductsList> {
                     Product product = products[index];
                     return ListTile(
                       title: Text(product.name),
-                      subtitle: Text('Category: ${product.categoryId.substring(0, 9)}...'),
+                      subtitle: Text('Category: ${product.categoryId.substring(0, 9)}...\n'
+                          'Generated: ${product.generated}'),
                     );
                   },
                 )),
@@ -71,11 +77,10 @@ class _ProductsListState extends State<ProductsList> {
         crossAxisAlignment: CrossAxisAlignment.center,
         mainAxisAlignment: MainAxisAlignment.spaceEvenly,
         children: [
+          Text('Status $loadingStatus'),
           FloatingActionButton(
             onPressed: () {
-              setState(() {
-                products = null;
-              });
+              products = null;
               loadData();
             },
             tooltip: 'Reload',
