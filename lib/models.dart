@@ -4,7 +4,12 @@ class Product {
   final String categoryId;
   final DateTime generated;
 
-  Product({this.id, this.name, this.categoryId, this.generated});
+  Product({
+    this.id,
+    this.name,
+    this.categoryId,
+    this.generated,
+  });
 
   Map<String, dynamic> toJson() {
     return {

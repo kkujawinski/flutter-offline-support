@@ -1,8 +1,18 @@
 import 'package:flutter/material.dart';
+
+import 'package:hive/hive.dart';
+import 'package:hive_flutter/hive_flutter.dart';
+
 import 'package:offline_support/models.dart';
+import 'package:offline_support/offline.dart';
 import 'package:offline_support/services.dart';
 
-void main() {
+class Globals {
+  static DataService dataService = DataService();
+}
+
+void main() async {
+  await Hive.initFlutter();
   runApp(MyApp());
 }
 
@@ -21,8 +31,6 @@ class MyApp extends StatelessWidget {
 }
 
 class ProductsList extends StatefulWidget {
-  DataService dataService = DataService();
-
   @override
   _ProductsListState createState() => _ProductsListState();
 }
@@ -34,7 +42,12 @@ class _ProductsListState extends State<ProductsList> {
   @override
   void initState() {
     super.initState();
-    loadData();
+    initLoadData();
+  }
+
+  Future initLoadData() async {
+    await Globals.dataService.init();
+    await loadData();
   }
 
   Future loadData() async {
@@ -42,18 +55,22 @@ class _ProductsListState extends State<ProductsList> {
       loadingStatus = 'LOADING';
     });
     await Future.delayed(Duration(seconds: 1));
-    try {
-      var products = await widget.dataService.getProducts()
-        ..sortByName();
+
+    Stream<Snapshot<List<Product>>> productsSnapshotStream = Globals.dataService.getProducts();
+
+    await for (var productsSnapshot in productsSnapshotStream) {
+      var products = productsSnapshot.data..sortByName();
+
       setState(() {
         this.products = products;
-        loadingStatus = 'ONLINE DATA';
-      });
-    } catch (exception) {
-      print('Products loading failed $exception');
-      setState(() {
-        loadingStatus = 'FAILED';
-        this.products = [];
+        if (productsSnapshot.returnedType == SnapshotType.ONLINE) {
+          loadingStatus = 'ONLINE DATA';
+        } else if (productsSnapshot.returnedType == SnapshotType.OFFLINE &&
+            productsSnapshot.requestedType == SnapshotType.ONLINE) {
+          loadingStatus = 'OFFLINE DATA\n(failed reloading)';
+        } else {
+          loadingStatus = 'OFFLINE DATA';
+        }
       });
     }
   }
