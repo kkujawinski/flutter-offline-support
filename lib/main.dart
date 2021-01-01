@@ -21,7 +21,7 @@ class MyApp extends StatelessWidget {
 }
 
 class ProductsList extends StatefulWidget {
-  ProductsService productsService = ProductsService();
+  DataService dataService = DataService();
 
   @override
   _ProductsListState createState() => _ProductsListState();
@@ -42,12 +42,20 @@ class _ProductsListState extends State<ProductsList> {
       loadingStatus = 'LOADING';
     });
     await Future.delayed(Duration(seconds: 1));
-    var products = await widget.productsService.getAll()
-      ..sortByName();
-    setState(() {
-      this.products = products;
-      loadingStatus = 'ONLINE DATA';
-    });
+    try {
+      var products = await widget.dataService.getProducts()
+        ..sortByName();
+      setState(() {
+        this.products = products;
+        loadingStatus = 'ONLINE DATA';
+      });
+    } catch (exception) {
+      print('Products loading failed $exception');
+      setState(() {
+        loadingStatus = 'FAILED';
+        this.products = [];
+      });
+    }
   }
 
   @override
