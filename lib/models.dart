@@ -15,6 +15,8 @@ class Product {
     return {
       'id': this.id,
       'name': this.name,
+      'category_id': this.categoryId,
+      'generated': this.generated.toIso8601String(),
     };
   }
 
