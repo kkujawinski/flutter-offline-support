@@ -22,13 +22,13 @@ class DataService {
 
   Stream<Snapshot<List<Product>>> getProducts({String nameContains}) async* {
     if (nameContains == null) {
-      yield* productOfflineController.getOnlineList(
+      yield* productOfflineController.getList(
         listFetcher: fetchProductList,
         dropMissing: true,
       );
     } else {
       nameContains = nameContains.toLowerCase();
-      yield* productOfflineController.getOnlineList(
+      yield* productOfflineController.getList(
         listFetcher: () => fetchProductList(nameContains: nameContains),
         condition: (item) => item['name'].toLowerCase().contains(nameContains),
         dropMissing: false,

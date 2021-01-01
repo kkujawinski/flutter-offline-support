@@ -50,13 +50,14 @@ class OfflineController<T> {
     this._initialized = true;
   }
 
-  Stream<Snapshot<List<T>>> getOnlineList({
+  Stream<Snapshot<List<T>>> getList({
     ListFetcher listFetcher,
     bool dropMissing: false,
     WhereConditionTest condition,
   }) async* {
     assert(this._initialized);
 
+    // Returning locally stored offline results
     Iterable<Map<String, dynamic>> offlineItems = box.values.map((item) => Map<String, dynamic>.from(item['data']));
     offlineItems = _applyWhereCondition(offlineItems, condition);
     yield Snapshot<List<T>>(
@@ -65,10 +66,12 @@ class OfflineController<T> {
       data: _prepareObjectsList(offlineItems).toList(),
     );
 
+    // Making a call for online results
     try {
       List<Map<String, dynamic>> onlineItems = await listFetcher();
       _storeItems(onlineItems, dropMissing: dropMissing);
     } on FailedOnlineRequest catch (exception) {
+      // Returning again offline results with failure information
       yield Snapshot<List<T>>(
         requestedType: SnapshotType.ONLINE,
         returnedType: SnapshotType.OFFLINE,
@@ -82,6 +85,7 @@ class OfflineController<T> {
     Iterable<Map<String, dynamic>> finalItems = box.values.map((item) => item['data']);
     finalItems = _applyWhereCondition(finalItems, condition);
 
+    // Returning online results
     yield Snapshot<List<T>>(
       requestedType: SnapshotType.ONLINE,
       returnedType: SnapshotType.ONLINE,
