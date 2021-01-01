@@ -39,10 +39,13 @@ class _ProductsListState extends State<ProductsList> {
   List<Product> products;
   String loadingStatus;
 
+  TextEditingController textController;
+
   @override
   void initState() {
     super.initState();
     initLoadData();
+    textController = TextEditingController();
   }
 
   Future initLoadData() async {
@@ -50,13 +53,15 @@ class _ProductsListState extends State<ProductsList> {
     await loadData();
   }
 
-  Future loadData() async {
+  Future loadData({String nameContains}) async {
     setState(() {
       loadingStatus = 'LOADING';
     });
     await Future.delayed(Duration(seconds: 1));
 
-    Stream<Snapshot<List<Product>>> productsSnapshotStream = Globals.dataService.getProducts();
+    Stream<Snapshot<List<Product>>> productsSnapshotStream = Globals.dataService.getProducts(
+      nameContains: nameContains,
+    );
 
     await for (var productsSnapshot in productsSnapshotStream) {
       var products = productsSnapshot.data..sortByName();
@@ -82,22 +87,49 @@ class _ProductsListState extends State<ProductsList> {
         title: Text('Offline Support Example'),
       ),
       body: Padding(
-          padding: EdgeInsets.all(5),
-          child: this.products == null
-              ? Center(
-                  child: CircularProgressIndicator(),
-                )
-              : ListView.builder(
-                  itemCount: this.products.length,
-                  itemBuilder: (BuildContext context, int index) {
-                    Product product = products[index];
-                    return ListTile(
-                      title: Text(product.name),
-                      subtitle: Text('Category: ${product.categoryId.substring(0, 9)}...\n'
-                          'Generated: ${product.generated}'),
-                    );
-                  },
-                )),
+        padding: EdgeInsets.all(5),
+        child: this.products == null
+            ? Center(
+                child: CircularProgressIndicator(),
+              )
+            : Column(
+                children: [
+                  ListTile(
+                    title: TextField(
+                      controller: textController,
+                      decoration: InputDecoration(
+                        hintText: 'Filter product list',
+                      ),
+                    ),
+                    trailing: Container(
+                      color: Colors.blue,
+                      child: FlatButton(
+                        child: Icon(
+                          Icons.search,
+                          color: Colors.white,
+                        ),
+                        onPressed: () {
+                          products = null;
+                          loadData(nameContains: textController.text);
+                        },
+                      ),
+                    ),
+                  ),
+                  ListView.builder(
+                    shrinkWrap: true,
+                    itemCount: this.products.length,
+                    itemBuilder: (BuildContext context, int index) {
+                      Product product = products[index];
+                      return ListTile(
+                        title: Text(product.name),
+                        subtitle: Text('Category: ${product.categoryId.substring(0, 9)}...\n'
+                            'Generated: ${product.generated}'),
+                      );
+                    },
+                  ),
+                ],
+              ),
+      ),
       floatingActionButton: Row(
         crossAxisAlignment: CrossAxisAlignment.center,
         mainAxisAlignment: MainAxisAlignment.spaceEvenly,
@@ -106,6 +138,7 @@ class _ProductsListState extends State<ProductsList> {
           FloatingActionButton(
             onPressed: () {
               products = null;
+              textController.text = '';
               loadData();
             },
             tooltip: 'Reload',

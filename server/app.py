@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from flask import jsonify, Flask
+from flask import jsonify, Flask, request
 from tinydb import TinyDB, Query
 import pathlib
 
@@ -18,6 +18,11 @@ def index():
 @app.route('/products')
 def products():
     output = db_products.all()
+
+    name_filter = request.args.get('name')
+    if name_filter is not None:
+        output = filter(lambda item: name_filter in item['name'].lower(), output)
+
     output = [dict(item, generated=datetime.now().isoformat())
               for item in output]
     return jsonify(output)

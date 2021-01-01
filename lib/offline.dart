@@ -11,6 +11,7 @@ class FailedOnlineRequest implements Exception {
 typedef ListFetcher = Future<List<Map<String, dynamic>>> Function();
 typedef KeyFunction = String Function(Map<String, dynamic> json);
 typedef ObjectFactory<T> = T Function(Map<String, dynamic> json);
+typedef WhereConditionTest = bool Function(Map<String, dynamic> json);
 
 enum SnapshotType { OFFLINE, ONLINE }
 
@@ -52,10 +53,12 @@ class OfflineController<T> {
   Stream<Snapshot<List<T>>> getOnlineList({
     ListFetcher listFetcher,
     bool dropMissing: false,
+    WhereConditionTest condition,
   }) async* {
     assert(this._initialized);
 
     Iterable<Map<String, dynamic>> offlineItems = box.values.map((item) => Map<String, dynamic>.from(item['data']));
+    offlineItems = _applyWhereCondition(offlineItems, condition);
     yield Snapshot<List<T>>(
       requestedType: SnapshotType.OFFLINE,
       returnedType: SnapshotType.OFFLINE,
@@ -77,6 +80,7 @@ class OfflineController<T> {
     }
 
     Iterable<Map<String, dynamic>> finalItems = box.values.map((item) => item['data']);
+    finalItems = _applyWhereCondition(finalItems, condition);
 
     yield Snapshot<List<T>>(
       requestedType: SnapshotType.ONLINE,
@@ -89,6 +93,13 @@ class OfflineController<T> {
     for (Map<String, dynamic> json in jsons) {
       yield objectFactory(json);
     }
+  }
+
+  Iterable<Map<String, dynamic>> _applyWhereCondition(Iterable<Map<String, dynamic>> items, WhereConditionTest where) {
+    if (where != null) {
+      items = items.where(where);
+    }
+    return items;
   }
 
   void _storeItems(Iterable<Map<String, dynamic>> items, {bool dropMissing: false}) {
