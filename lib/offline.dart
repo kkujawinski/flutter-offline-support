@@ -29,6 +29,16 @@ class Snapshot<T> {
     this.failedResponse,
     this.originException,
   });
+
+  Snapshot<T> copy<T>({T data}) {
+    return Snapshot<T>(
+      requestedType: this.requestedType,
+      returnedType: this.returnedType,
+      data: data,
+      failedResponse: this.failedResponse,
+      originException: this.originException,
+    );
+  }
 }
 
 class OfflineController<T> {
@@ -73,43 +83,50 @@ class OfflineController<T> {
     ListFetcher listFetcher,
     bool dropMissing: false,
     WhereConditionTest condition,
+    bool skipOffline,
+    bool skipOnline,
   }) async* {
     assert(this._initialized);
 
     // Returning locally stored offline results
     Iterable<Map<String, dynamic>> offlineItems = box.values.map((item) => Map<String, dynamic>.from(item['data']));
     offlineItems = _applyWhereCondition(offlineItems, condition);
-    yield Snapshot<List<T>>(
-      requestedType: SnapshotType.OFFLINE,
-      returnedType: SnapshotType.OFFLINE,
-      data: _prepareObjectsList(offlineItems).toList(),
-    );
 
-    // Making a call for online results
-    try {
-      List<Map<String, dynamic>> onlineItems = await listFetcher();
-      _storeItems(onlineItems, dropMissing: dropMissing);
-    } on FailedOnlineRequest catch (exception) {
-      // Returning again offline results with failure information
+    if (skipOffline != true) {
       yield Snapshot<List<T>>(
-        requestedType: SnapshotType.ONLINE,
+        requestedType: SnapshotType.OFFLINE,
         returnedType: SnapshotType.OFFLINE,
         data: _prepareObjectsList(offlineItems).toList(),
-        failedResponse: exception.failedResponse,
-        originException: exception.originException,
       );
-      return;
     }
 
-    Iterable<Map<String, dynamic>> finalItems = box.values.map((item) => item['data']);
-    finalItems = _applyWhereCondition(finalItems, condition);
+    if (skipOnline != true) {
+      // Making a call for online results
+      try {
+        List<Map<String, dynamic>> onlineItems = await listFetcher();
+        _storeItems(onlineItems, dropMissing: dropMissing);
+      } on FailedOnlineRequest catch (exception) {
+        // Returning again offline results with failure information
+        yield Snapshot<List<T>>(
+          requestedType: SnapshotType.ONLINE,
+          returnedType: SnapshotType.OFFLINE,
+          data: _prepareObjectsList(offlineItems).toList(),
+          failedResponse: exception.failedResponse,
+          originException: exception.originException,
+        );
+        return;
+      }
 
-    // Returning online results
-    yield Snapshot<List<T>>(
-      requestedType: SnapshotType.ONLINE,
-      returnedType: SnapshotType.ONLINE,
-      data: _prepareObjectsList(finalItems).toList(),
-    );
+      Iterable<Map<String, dynamic>> finalItems = box.values.map((item) => item['data']);
+      finalItems = _applyWhereCondition(finalItems, condition);
+
+      // Returning online results
+      yield Snapshot<List<T>>(
+        requestedType: SnapshotType.ONLINE,
+        returnedType: SnapshotType.ONLINE,
+        data: _prepareObjectsList(finalItems).toList(),
+      );
+    }
   }
 
   Iterable<T> _prepareObjectsList(Iterable<Map<String, dynamic>> jsons) sync* {

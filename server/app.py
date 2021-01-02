@@ -31,6 +31,14 @@ def products():
 @app.route('/categories')
 def categories():
     output = db_categories.all()
+
+    ids_filter = request.args.get('ids')
+    if ids_filter is not None:
+        ids = set(ids_filter.split(','))
+        output = filter(lambda item: item['id'] in ids, output)
+
+    output = [dict(item, generated=datetime.now().isoformat())
+              for item in output]
     return jsonify(output)
 
 

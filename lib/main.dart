@@ -57,10 +57,10 @@ class _ProductsListState extends State<ProductsList> {
     setState(() {
       loadingStatus = 'LOADING';
     });
-    await Future.delayed(Duration(seconds: 1));
 
     Stream<Snapshot<List<Product>>> productsSnapshotStream = Globals.dataService.getProducts(
       nameContains: nameContains,
+      prefetchCategories: true,
     );
 
     await for (var productsSnapshot in productsSnapshotStream) {
@@ -88,47 +88,50 @@ class _ProductsListState extends State<ProductsList> {
       ),
       body: Padding(
         padding: EdgeInsets.all(5),
-        child: this.products == null
-            ? Center(
-                child: CircularProgressIndicator(),
-              )
-            : Column(
-                children: [
-                  ListTile(
-                    title: TextField(
-                      controller: textController,
-                      decoration: InputDecoration(
-                        hintText: 'Filter product list',
-                      ),
-                    ),
-                    trailing: Container(
-                      color: Colors.blue,
-                      child: FlatButton(
-                        child: Icon(
-                          Icons.search,
-                          color: Colors.white,
-                        ),
-                        onPressed: () {
-                          products = null;
-                          loadData(nameContains: textController.text);
-                        },
-                      ),
-                    ),
+        child: Column(
+          children: [
+            ListTile(
+              title: TextField(
+                controller: textController,
+                decoration: InputDecoration(
+                  hintText: 'Filter product list',
+                ),
+              ),
+              trailing: Container(
+                color: Colors.blue,
+                child: FlatButton(
+                  child: Icon(
+                    Icons.search,
+                    color: Colors.white,
                   ),
-                  ListView.builder(
+                  onPressed: () {
+                    products = null;
+                    loadData(nameContains: textController.text);
+                  },
+                ),
+              ),
+            ),
+            this.products == null
+                ? Center(
+                    child: Padding(
+                      padding: const EdgeInsets.only(top: 25.0),
+                      child: CircularProgressIndicator(),
+                    ),
+                  )
+                : ListView.builder(
                     shrinkWrap: true,
                     itemCount: this.products.length,
                     itemBuilder: (BuildContext context, int index) {
                       Product product = products[index];
+                      ProductCategory category = product?.category?.data;
                       return ListTile(
-                        title: Text(product.name),
-                        subtitle: Text('Category: ${product.categoryId.substring(0, 9)}...\n'
-                            'Generated: ${product.generated}'),
+                        title: Text('${product.name} (${product.generated})'),
+                        subtitle: Text('${category?.name} (${category?.generated})'),
                       );
                     },
                   ),
-                ],
-              ),
+          ],
+        ),
       ),
       floatingActionButton: Row(
         crossAxisAlignment: CrossAxisAlignment.center,
