@@ -32,9 +32,16 @@ class Snapshot<T> {
 }
 
 class OfflineController<T> {
+  static bool _globalInitialized = false;
+  static Box _versionsBox;
+  static String _versionsBoxName = 'versions';
+
+  static Set<String> _restrictedBoxNames = {_versionsBoxName};
+
   final String boxName;
   final ObjectFactory<T> objectFactory;
   final KeyFunction keyFunction;
+  final String version;
   Box box;
 
   bool _initialized = false;
@@ -43,11 +50,23 @@ class OfflineController<T> {
     this.boxName, {
     @required this.objectFactory,
     @required this.keyFunction,
-  });
+    this.version = '',
+  }) {
+    assert(!_restrictedBoxNames.contains(boxName));
+    _restrictedBoxNames.add(boxName);
+  }
 
   Future init() async {
+    await OfflineController._globalInit();
     box = await Hive.openBox(this.boxName);
+    _boxVersionCheck();
     this._initialized = true;
+  }
+
+  static Future _globalInit() async {
+    if (_globalInitialized) return;
+    _versionsBox = await Hive.openBox(_versionsBoxName);
+    _globalInitialized = true;
   }
 
   Stream<Snapshot<List<T>>> getList({
@@ -116,6 +135,12 @@ class OfflineController<T> {
     }
     if (dropMissing) {
       box.deleteAll(oldKeys.difference(newKeys));
+    }
+  }
+
+  String _boxVersionCheck() {
+    if ((_versionsBox.get(boxName) ?? '') != version) {
+      box.deleteAll(box.keys);
     }
   }
 }
