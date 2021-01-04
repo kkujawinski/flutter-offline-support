@@ -155,7 +155,7 @@ class OfflineController<T> {
     }
   }
 
-  String _boxVersionCheck() {
+  _boxVersionCheck() {
     if ((_versionsBox.get(boxName) ?? '') != version) {
       box.deleteAll(box.keys);
     }
