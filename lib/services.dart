@@ -1,13 +1,10 @@
 import 'dart:convert' as convert;
+import 'dart:convert';
 import 'package:http/http.dart' as http;
 
 import 'package:offline_support/models.dart';
 import 'package:offline_support/offline.dart';
-
-final String apiScheme = 'http';
-final String apiHost = '127.0.0.1';
-final int apiPort = 5000;
-final String apiPath = '';
+import 'package:offline_support/persistence.dart';
 
 class DataService {
   OfflineController productOfflineController = OfflineController<Product>(
@@ -22,10 +19,18 @@ class DataService {
     keyFunction: (item) => item['id'],
     version: '20210102-1',
   );
+  PersistenceController persistanceController;
+
+  static const String SAVE_PRODUCT_PERSISTOR_ID = 'saveProductPersistor';
+
+  DataService(this.persistanceController);
 
   Future init() async {
     await productOfflineController.init();
     await categoriesOfflineController.init();
+    persistanceController.registerPersistors({
+      SAVE_PRODUCT_PERSISTOR_ID: PersistorDefinition<Product>(saveProductPersistor, Product.fromJson),
+    });
   }
 
   Stream<Snapshot<List<Product>>> getProducts({String nameContains, prefetchCategories: false}) async* {
@@ -50,28 +55,11 @@ class DataService {
   }
 
   Future<List<Map<String, dynamic>>> fetchProductList({String nameContains}) async {
-    try {
-      var uri = Uri(
-        scheme: apiScheme,
-        host: apiHost,
-        port: apiPort,
-        path: apiPath + '/products',
-        queryParameters: {
-          if (nameContains != null) 'name': nameContains,
-        },
-      );
-      // Simulating long request
-      await Future.delayed(Duration(seconds: 1));
-      print('GET $uri');
-      var response = await http.get(uri);
-      if (response.statusCode == 200) {
-        var converted = convert.jsonDecode(response.body);
-        return List<Map<String, dynamic>>.from(converted);
-      }
-      throw FailedOnlineRequest(failedResponse: response);
-    } catch (exception) {
-      throw FailedOnlineRequest(originException: exception);
-    }
+    var uri = HttpService.prepareUri('/products', queryParameters: {
+      if (nameContains != null) 'name': nameContains,
+    });
+    var data = await HttpService.get(uri);
+    return List<Map<String, dynamic>>.from(data);
   }
 
   Future _prefetchProductsRelations(List<Product> items, SnapshotType prefetchType, {prefetchCategories: false}) async {
@@ -117,21 +105,75 @@ class DataService {
   }
 
   Future<List<Map<String, dynamic>>> fetchCategoriesList({Set<String> ids}) async {
+    var uri = HttpService.prepareUri('/categories', queryParameters: {
+      if (ids != null) 'ids': ids.join(','),
+    });
+    var data = await HttpService.get(uri);
+    return List<Map<String, dynamic>>.from(data);
+  }
+
+  void saveProduct(Product product, {PersistenceCallback<Product> callback}) {
+    persistanceController.persist<Product>(SAVE_PRODUCT_PERSISTOR_ID, product, callback: callback);
+  }
+
+  void registerSaveProductCallback(
+      PersistenceCallback<Product> callback, PersistenceCallbackCondition<Product> condition) {
+    persistanceController.registerCallback<Product>(
+      SAVE_PRODUCT_PERSISTOR_ID,
+      PersistenceCallbackDefinition<Product>(callback, condition: condition),
+    );
+  }
+
+  Future<Map<String, dynamic>> saveProductPersistor(Map<String, dynamic> product) {
+    var uri = HttpService.prepareUri('/products');
+    return HttpService.post(uri, product);
+  }
+}
+
+class HttpService {
+  static const String API_SCHEME = 'http';
+  static const String API_HOST = '127.0.0.1';
+  static const int API_PORT = 5000;
+  static const String API_PATH = '';
+
+  static Uri prepareUri(String path, {Map<String, String> queryParameters}) {
+    return Uri(
+      scheme: API_SCHEME,
+      host: API_HOST,
+      port: API_PORT,
+      path: API_PATH + path,
+      queryParameters: queryParameters,
+    );
+  }
+
+  static Future<Map<String, dynamic>> post(Uri uri, Map<String, dynamic> data) async {
     try {
-      var uri = Uri(
-        scheme: apiScheme,
-        host: apiHost,
-        port: apiPort,
-        path: apiPath + '/categories',
-        queryParameters: {
-          if (ids != null) 'ids': ids.join(','),
-        },
-      );
+      print('POST $uri');
+      var response = await http.post(uri, body: jsonEncode(data));
+      if (response.statusCode >= 200 && response.statusCode < 300) {
+        return convert.jsonDecode(response.body);
+      } else if (response.statusCode >= 400 && response.statusCode < 500) {
+        throw PersistenceRequestError(
+          response.body.toString(),
+          failedResponse: response,
+          failedResponseData: convert.jsonDecode(response.body),
+        );
+      } else {
+        throw PersistenceError(response.body.toString(), failedResponse: response);
+      }
+    } on PersistenceRequestError {
+      rethrow;
+    } catch (exception) {
+      throw PersistenceError(exception.toString(), originException: exception);
+    }
+  }
+
+  static Future<dynamic> get(Uri uri) async {
+    try {
       print('GET $uri');
       var response = await http.get(uri);
       if (response.statusCode == 200) {
-        var converted = convert.jsonDecode(response.body);
-        return List<Map<String, dynamic>>.from(converted);
+        return convert.jsonDecode(response.body);
       }
       throw FailedOnlineRequest(failedResponse: response);
     } catch (exception) {

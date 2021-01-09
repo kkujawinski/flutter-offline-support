@@ -1,7 +1,9 @@
 import 'package:offline_support/offline.dart';
+import 'package:offline_support/persistence.dart';
+import 'package:uuid/uuid.dart';
 
-class Product {
-  final String id;
+class Product extends Persistable {
+  String id;
   final String name;
   final String categoryId;
   final DateTime generated;
@@ -14,14 +16,19 @@ class Product {
     this.name,
     this.categoryId,
     this.generated,
-  });
+  }) {
+    if (id == null) {
+      this.id = Uuid().v4();
+//      this.isLocal = true;
+    }
+  }
 
   Map<String, dynamic> toJson() {
     return {
       'id': this.id,
       'name': this.name,
       'category_id': this.categoryId,
-      'generated': this.generated.toIso8601String(),
+      'generated': this.generated?.toIso8601String(),
     };
   }
 

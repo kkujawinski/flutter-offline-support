@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import 'package:hive/hive.dart';
@@ -5,14 +6,19 @@ import 'package:hive_flutter/hive_flutter.dart';
 
 import 'package:offline_support/models.dart';
 import 'package:offline_support/offline.dart';
+import 'package:offline_support/persistence.dart';
 import 'package:offline_support/services.dart';
 
 class Globals {
-  static DataService dataService = DataService();
+  static DataService dataService = DataService(PersistenceController.getInstance());
+  static PersistenceController persistenceController = PersistenceController.getInstance();
+  static GlobalKey appGlobalKey = GlobalKey();
 }
 
 void main() async {
   await Hive.initFlutter();
+  await Globals.dataService.init();
+  await Globals.persistenceController.init();
   runApp(MyApp());
 }
 
@@ -37,7 +43,9 @@ class ProductsList extends StatefulWidget {
 
 class _ProductsListState extends State<ProductsList> {
   List<Product> products;
+  List<ProductCategory> categories;
   String loadingStatus;
+  bool newProductDialogOpen = false;
 
   TextEditingController textController;
 
@@ -49,8 +57,41 @@ class _ProductsListState extends State<ProductsList> {
   }
 
   Future initLoadData() async {
-    await Globals.dataService.init();
     await loadData();
+    Globals.persistenceController.registerCallback<Product>(
+      DataService.SAVE_PRODUCT_PERSISTOR_ID,
+      PersistenceCallbackDefinition<Product>(
+        (Product saved, PersistenceError error) {
+          if (saved != null) {
+            if (!newProductDialogOpen) {
+              var scaffoldState = (Globals.appGlobalKey.currentState as ScaffoldState);
+              scaffoldState.showSnackBar(
+                SnackBar(
+                  content: Padding(
+                    padding: EdgeInsets.all(10),
+                    child: Text('Saved ${saved.name}'),
+                  ),
+                ),
+              );
+            }
+            loadData();
+          } else {
+            if (!newProductDialogOpen) {
+              var scaffoldState = (Globals.appGlobalKey.currentState as ScaffoldState);
+              scaffoldState.showSnackBar(
+                SnackBar(
+                  backgroundColor: Colors.redAccent[700],
+                  content: Padding(
+                    padding: EdgeInsets.all(10),
+                    child: Text(error.message),
+                  ),
+                ),
+              );
+            }
+          }
+        },
+      ),
+    );
   }
 
   Future loadData({String nameContains}) async {
@@ -58,16 +99,23 @@ class _ProductsListState extends State<ProductsList> {
       loadingStatus = 'LOADING';
     });
 
+    if (categories == null) {
+      Stream<Snapshot<List<ProductCategory>>> categoriesSnapshotStream = Globals.dataService.getCategories();
+      await for (var categoriesSnapshot in categoriesSnapshotStream) {
+        setState(() {
+          categories = categoriesSnapshot.data;
+        });
+      }
+    }
+
     Stream<Snapshot<List<Product>>> productsSnapshotStream = Globals.dataService.getProducts(
       nameContains: nameContains,
       prefetchCategories: true,
     );
 
     await for (var productsSnapshot in productsSnapshotStream) {
-      var products = productsSnapshot.data..sortByName();
-
       setState(() {
-        this.products = products;
+        this.products = productsSnapshot.data..sortByName();
         if (productsSnapshot.returnedType == SnapshotType.ONLINE) {
           loadingStatus = 'ONLINE DATA';
         } else if (productsSnapshot.returnedType == SnapshotType.OFFLINE &&
@@ -83,6 +131,7 @@ class _ProductsListState extends State<ProductsList> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      key: Globals.appGlobalKey,
       appBar: AppBar(
         title: Text('Offline Support Example'),
       ),
@@ -135,20 +184,199 @@ class _ProductsListState extends State<ProductsList> {
       ),
       floatingActionButton: Row(
         crossAxisAlignment: CrossAxisAlignment.center,
-        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+        mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Text('Status $loadingStatus'),
-          FloatingActionButton(
-            onPressed: () {
-              products = null;
-              textController.text = '';
-              loadData();
-            },
-            tooltip: 'Reload',
-            child: Icon(Icons.refresh),
+          Padding(
+            padding: const EdgeInsets.all(8.0),
+            child: SizedBox(
+              width: 150,
+              child: Text('Status $loadingStatus', textAlign: TextAlign.center),
+            ),
           ),
+          Padding(
+            padding: EdgeInsets.all(8.0),
+            child: FloatingActionButton(
+              onPressed: () {
+                products = null;
+                textController.text = '';
+                loadData();
+              },
+              tooltip: 'Reload',
+              child: Icon(Icons.refresh),
+            ),
+          ),
+          Padding(
+            padding: EdgeInsets.all(8.0),
+            child: FloatingActionButton(
+              onPressed: (categories?.isNotEmpty ?? false)
+                  ? () async {
+                      newProductDialogOpen = true;
+                      await showDialog(
+                        context: context,
+                        builder: (BuildContext context) {
+                          return CreateProductForm(categories: categories);
+                        },
+                      );
+                      newProductDialogOpen = false;
+                    }
+                  : () {
+                      showDialog(
+                        context: context,
+                        builder: (BuildContext context) {
+                          return AlertDialog(
+                            content: Text('Categories not loaded'),
+                          );
+                        },
+                      );
+                    },
+              tooltip: 'Add new',
+              child: Icon(Icons.add),
+            ),
+          )
         ],
       ), // This trailing comma makes auto-formatting nicer for build methods.
     );
+  }
+}
+
+class CreateProductForm extends StatefulWidget {
+  final List<ProductCategory> categories;
+
+  const CreateProductForm({Key key, this.categories}) : super(key: key);
+
+  @override
+  _CreateProductFormState createState() => _CreateProductFormState();
+}
+
+class _CreateProductFormState extends State<CreateProductForm> {
+  final _formKey = GlobalKey<FormState>();
+
+  String _productNameError;
+
+  ProductCategory _category;
+  String _productName;
+
+  bool _widgetDisposed = false;
+  bool _saving = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      content: Form(
+        key: _formKey,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: <Widget>[
+            Padding(
+              padding: EdgeInsets.all(8.0),
+              child: TextFormField(
+                onChanged: (String value) {
+                  setState(() {
+                    _productNameError = null;
+                  });
+                },
+                onSaved: (String value) {
+                  _productName = value;
+                },
+                validator: (String value) {
+                  return value.trim().length == 0 ? 'Product name can\'t be empty' : null;
+                },
+                autovalidateMode: AutovalidateMode.onUserInteraction,
+                decoration: InputDecoration(
+                  helperText: 'Product name',
+                  errorText: _productNameError != null ? _productNameError : null,
+                ),
+              ),
+            ),
+            Padding(
+              padding: EdgeInsets.all(8.0),
+              child: DropdownButtonFormField<ProductCategory>(
+                onSaved: (ProductCategory value) {
+                  _category = value;
+                },
+                onChanged: (ProductCategory value) {}, // required
+                value: widget.categories.first,
+                items: widget.categories
+                    .map(
+                      (item) => DropdownMenuItem<ProductCategory>(
+                        value: item,
+                        child: Text(item.name),
+                      ),
+                    )
+                    .toList(),
+                decoration: InputDecoration(
+                  helperText: 'Category',
+                ),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.all(8.0),
+              child: RaisedButton(
+                child: Text("Save"),
+                onPressed: () {
+                  if (_formKey.currentState.validate()) {
+                    _formKey.currentState.save();
+                    setState(() {
+                      _saving = true;
+                    });
+                    Globals.dataService.saveProduct(
+                      Product(
+                        name: _productName,
+                        categoryId: _category.id,
+                      ),
+                      callback: (Product saved, PersistenceError error) {
+                        if (_widgetDisposed) return;
+                        if (saved != null) {
+                          Navigator.of(context).pop();
+                          var scaffoldState = (Globals.appGlobalKey.currentState as ScaffoldState);
+                          scaffoldState.showSnackBar(
+                            SnackBar(
+                              content: Padding(
+                                padding: EdgeInsets.all(10),
+                                child: Text("Saved ${saved.name}"),
+                              ),
+                            ),
+                          );
+                        } else if (error.originException != null) {
+                          Navigator.of(context).pop();
+                          var scaffoldState = (Globals.appGlobalKey.currentState as ScaffoldState);
+                          scaffoldState.showSnackBar(
+                            SnackBar(
+                              content: Padding(
+                                padding: EdgeInsets.all(10),
+                                child: Text(error.originException.toString()),
+                              ),
+                            ),
+                          );
+                        } else if (error.failedResponseData != null) {
+                          if (error.failedResponseData['name'] != null) {
+                            setState(() {
+                              _saving = false;
+                              _productNameError = error.failedResponseData['name'];
+                            });
+                          }
+                        }
+                      },
+                    );
+                  }
+                },
+              ),
+            ),
+            _saving
+                ? SizedBox(
+                    height: 4,
+                    child: LinearProgressIndicator(),
+                  )
+                : SizedBox(height: 4)
+          ],
+        ),
+      ),
+    );
+  }
+
+  @override
+  void dispose() {
+    _widgetDisposed = true;
+    super.dispose();
   }
 }

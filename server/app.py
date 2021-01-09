@@ -15,17 +15,27 @@ def index():
     return 'api-ok'
 
 
-@app.route('/products')
+@app.route('/products', methods=['GET', 'POST'])
 def products():
-    output = db_products.all()
+    if request.method == 'GET':
+        output = db_products.all()
 
-    name_filter = request.args.get('name')
-    if name_filter is not None:
-        output = filter(lambda item: name_filter in item['name'].lower(), output)
+        name_filter = request.args.get('name')
+        if name_filter is not None:
+            output = filter(lambda item: name_filter in item['name'].lower(), output)
 
-    output = [dict(item, generated=datetime.now().isoformat())
-              for item in output]
-    return jsonify(output)
+        output = [dict(item, generated=datetime.now().isoformat())
+                  for item in output]
+        return jsonify(output)
+    elif request.method == 'POST':
+        product = request.get_json(force=True);
+
+        if product['name'] in map(lambda item: item['name'], db_products.all()):
+            return jsonify({'name': 'Product already exists'}), 400
+
+        db_products.insert(product)
+
+        return jsonify(dict(product, generated=datetime.now().isoformat()))
 
 
 @app.route('/categories')
@@ -37,8 +47,7 @@ def categories():
         ids = set(ids_filter.split(','))
         output = filter(lambda item: item['id'] in ids, output)
 
-    output = [dict(item, generated=datetime.now().isoformat())
-              for item in output]
+    output = [dict(item, generated=datetime.now().isoformat()) for item in output]
     return jsonify(output)
 
 

@@ -1,4 +1,5 @@
 import 'package:flutter/foundation.dart';
+import 'package:flutter/material.dart';
 import 'package:hive/hive.dart';
 import 'package:http/http.dart';
 
@@ -42,11 +43,12 @@ class Snapshot<T> {
 }
 
 class OfflineController<T> {
+  static const String VERSIONS_BOX_NAME = '_versions';
+
   static bool _globalInitialized = false;
   static Box _versionsBox;
-  static String _versionsBoxName = 'versions';
 
-  static Set<String> _restrictedBoxNames = {_versionsBoxName};
+  static Set<String> _restrictedBoxNames = {};
 
   final String boxName;
   final ObjectFactory<T> objectFactory;
@@ -75,7 +77,7 @@ class OfflineController<T> {
 
   static Future _globalInit() async {
     if (_globalInitialized) return;
-    _versionsBox = await Hive.openBox(_versionsBoxName);
+    _versionsBox = await Hive.openBox(VERSIONS_BOX_NAME);
     _globalInitialized = true;
   }
 
@@ -157,7 +159,9 @@ class OfflineController<T> {
 
   _boxVersionCheck() {
     if ((_versionsBox.get(boxName) ?? '') != version) {
+      print('Clearing box $boxName. Versions mismatch ${_versionsBox.get(boxName) ?? ''} vs $version');
       box.deleteAll(box.keys);
+      _versionsBox.put(boxName, version);
     }
   }
 }
