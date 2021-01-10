@@ -74,7 +74,6 @@ class _ProductsListState extends State<ProductsList> {
                 ),
               );
             }
-            loadData();
           } else {
             if (!newProductDialogOpen) {
               var scaffoldState = (Globals.appGlobalKey.currentState as ScaffoldState);
@@ -89,6 +88,7 @@ class _ProductsListState extends State<ProductsList> {
               );
             }
           }
+          loadData();
         },
       ),
     );
