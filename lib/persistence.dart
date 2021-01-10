@@ -9,6 +9,8 @@ typedef PersistenceCallbackCondition<T> = bool Function(String persistenceId, Ma
 
 abstract class Persistable {
   Map<String, dynamic> toJson();
+  get isLocal;
+  set isLocal(bool _isLocal);
 }
 
 class PersistorDefinition<T> {

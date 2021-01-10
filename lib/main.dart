@@ -174,7 +174,7 @@ class _ProductsListState extends State<ProductsList> {
                       Product product = products[index];
                       ProductCategory category = product?.category?.data;
                       return ListTile(
-                        title: Text('${product.name} (${product.generated})'),
+                        title: Text('${product.name} (${product.generated ?? ''}${product.isLocal ? 'local' : ''})'),
                         subtitle: Text('${category?.name} (${category?.generated})'),
                       );
                     },
@@ -214,7 +214,12 @@ class _ProductsListState extends State<ProductsList> {
                       await showDialog(
                         context: context,
                         builder: (BuildContext context) {
-                          return CreateProductForm(categories: categories);
+                          return CreateProductForm(
+                            categories: categories,
+                            productSaved: () {
+                              loadData();
+                            },
+                          );
                         },
                       );
                       newProductDialogOpen = false;
@@ -241,8 +246,9 @@ class _ProductsListState extends State<ProductsList> {
 
 class CreateProductForm extends StatefulWidget {
   final List<ProductCategory> categories;
+  final Function() productSaved;
 
-  const CreateProductForm({Key key, this.categories}) : super(key: key);
+  const CreateProductForm({Key key, this.categories, this.productSaved}) : super(key: key);
 
   @override
   _CreateProductFormState createState() => _CreateProductFormState();
@@ -358,6 +364,9 @@ class _CreateProductFormState extends State<CreateProductForm> {
                         }
                       },
                     );
+                    if (widget.productSaved != null) {
+                      widget.productSaved();
+                    }
                   }
                 },
               ),

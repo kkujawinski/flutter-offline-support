@@ -7,9 +7,10 @@ class Product extends Persistable {
   final String name;
   final String categoryId;
   final DateTime generated;
-
-  // filled externally
   Snapshot<ProductCategory> category;
+
+  @override
+  bool isLocal;
 
   Product({
     this.id,
@@ -19,7 +20,6 @@ class Product extends Persistable {
   }) {
     if (id == null) {
       this.id = Uuid().v4();
-//      this.isLocal = true;
     }
   }
 
@@ -37,7 +37,7 @@ class Product extends Persistable {
       id: json['id'],
       name: json['name'],
       categoryId: json['category_id'],
-      generated: DateTime.parse(json['generated']),
+      generated: json['generated'] == null ? null : DateTime.parse(json['generated']),
     );
   }
 }

@@ -11,7 +11,7 @@ class DataService {
     'products',
     objectFactory: Product.fromJson,
     keyFunction: (item) => item['id'],
-    version: '20210102-1',
+    version: '20210110-1',
   );
   OfflineController categoriesOfflineController = OfflineController<ProductCategory>(
     'categories',
@@ -114,6 +114,7 @@ class DataService {
 
   void saveProduct(Product product, {PersistenceCallback<Product> callback}) {
     persistanceController.persist<Product>(SAVE_PRODUCT_PERSISTOR_ID, product, callback: callback);
+    productOfflineController.storeLocal(product);
   }
 
   void registerSaveProductCallback(

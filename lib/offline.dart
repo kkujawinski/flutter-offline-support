@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:hive/hive.dart';
 import 'package:http/http.dart';
+import 'package:offline_support/persistence.dart';
 
 class FailedOnlineRequest implements Exception {
   final Response failedResponse;
@@ -31,8 +32,8 @@ class Snapshot<T> {
     this.originException,
   });
 
-  Snapshot<T> copy<T>({T data}) {
-    return Snapshot<T>(
+  Snapshot<Q> copy<Q>({Q data}) {
+    return Snapshot<Q>(
       requestedType: this.requestedType,
       returnedType: this.returnedType,
       data: data,
@@ -81,6 +82,12 @@ class OfflineController<T> {
     _globalInitialized = true;
   }
 
+  storeLocal<Q extends Persistable>(Q object) {
+    var productJson = object.toJson();
+    var key = keyFunction(productJson);
+    box.put(key, {'data': productJson, 'key': key, 'is_local': true});
+  }
+
   Stream<Snapshot<List<T>>> getList({
     ListFetcher listFetcher,
     bool dropMissing: false,
@@ -91,7 +98,7 @@ class OfflineController<T> {
     assert(this._initialized);
 
     // Returning locally stored offline results
-    Iterable<Map<String, dynamic>> offlineItems = box.values.map((item) => Map<String, dynamic>.from(item['data']));
+    Iterable<Map<String, dynamic>> offlineItems = box.values.map((e) => Map<String, dynamic>.from(e));
     offlineItems = _applyWhereCondition(offlineItems, condition);
 
     if (skipOffline != true) {
@@ -119,7 +126,7 @@ class OfflineController<T> {
         return;
       }
 
-      Iterable<Map<String, dynamic>> finalItems = box.values.map((item) => item['data']);
+      Iterable<Map<String, dynamic>> finalItems = box.values.map((e) => Map<String, dynamic>.from(e));
       finalItems = _applyWhereCondition(finalItems, condition);
 
       // Returning online results
@@ -131,15 +138,19 @@ class OfflineController<T> {
     }
   }
 
-  Iterable<T> _prepareObjectsList(Iterable<Map<String, dynamic>> jsons) sync* {
-    for (Map<String, dynamic> json in jsons) {
-      yield objectFactory(json);
+  Iterable<T> _prepareObjectsList(Iterable<Map<String, dynamic>> items) sync* {
+    for (var item in items) {
+      var object = objectFactory(Map<String, dynamic>.from(item['data']));
+      if (object is Persistable) {
+        (object as Persistable).isLocal = item['is_local'] ?? false;
+      }
+      yield object;
     }
   }
 
   Iterable<Map<String, dynamic>> _applyWhereCondition(Iterable<Map<String, dynamic>> items, WhereConditionTest where) {
     if (where != null) {
-      items = items.where(where);
+      items = items.where((item) => where(Map<String, dynamic>.from(item['data'])));
     }
     return items;
   }
