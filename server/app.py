@@ -1,4 +1,6 @@
-from flask import jsonify, Flask
+from datetime import datetime
+
+from flask import jsonify, Flask, request
 from tinydb import TinyDB, Query
 import pathlib
 
@@ -13,15 +15,39 @@ def index():
     return 'api-ok'
 
 
-@app.route('/products')
+@app.route('/products', methods=['GET', 'POST'])
 def products():
-    output = db_products.all()
-    return jsonify(output)
+    if request.method == 'GET':
+        output = db_products.all()
+
+        name_filter = request.args.get('name')
+        if name_filter is not None:
+            output = filter(lambda item: name_filter in item['name'].lower(), output)
+
+        output = [dict(item, generated=datetime.now().isoformat())
+                  for item in output]
+        return jsonify(output)
+    elif request.method == 'POST':
+        product = request.get_json(force=True);
+
+        if product['name'] in map(lambda item: item['name'], db_products.all()):
+            return jsonify({'name': 'Product already exists'}), 400
+
+        db_products.insert(product)
+
+        return jsonify(dict(product, generated=datetime.now().isoformat()))
 
 
 @app.route('/categories')
 def categories():
     output = db_categories.all()
+
+    ids_filter = request.args.get('ids')
+    if ids_filter is not None:
+        ids = set(ids_filter.split(','))
+        output = filter(lambda item: item['id'] in ids, output)
+
+    output = [dict(item, generated=datetime.now().isoformat()) for item in output]
     return jsonify(output)
 
 
